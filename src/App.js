@@ -22,10 +22,12 @@ class App extends Component {
     // every time component state changes the render()
     // method of the component is called
     this.state = {
-      result: null,
+      results: null,
+      searchKey: "",
       searchTerm: DEFAULT_QUERY
     };
 
+    this.needsToSearchTopStories = this.needsToSearchTopStories.bind(this);
     this.setSearchTopStories = this.setSearchTopStories.bind(this);
     this.fetchSearchTopStories = this.fetchSearchTopStories.bind(this);
     this.onSearchChange = this.onSearchChange.bind(this);
@@ -35,11 +37,21 @@ class App extends Component {
 
   setSearchTopStories(result) {
     const { hits, page } = result;
-    const oldHits = page !== 0 ? this.state.result.hits : [];
+    const { searchKey, results } = this.state;
+    const oldHits =
+      results && results[searchKey] ? results[searchKey].hits : [];
+
     const updatedHits = [...oldHits, ...hits];
     this.setState({
-      result: { hits: updatedHits, page }
+      results: {
+        ...results,
+        [searchKey]: { hits: updatedHits, page }
+      }
     });
+  }
+
+  needsToSearchTopStories(searchTerm) {
+    return !this.state.results[searchTerm];
   }
 
   fetchSearchTopStories(searchTerm, page = 0) {
@@ -53,43 +65,59 @@ class App extends Component {
 
   componentDidMount() {
     const { searchTerm } = this.state;
+    this.setState({ searchKey: searchTerm });
     this.fetchSearchTopStories(searchTerm);
   }
 
   // When using a handler in your element, you get access to the
   // synthetic React event in your callback function’s signature
+  // Synthetic events are event objects that are created ex nihilo
+  // by. the JavaScript programmer, as opposed to "real" events that
+  // come into. being as a result of an action within the browser window.
   onSearchChange(event) {
     this.setState({ searchTerm: event.target.value });
   }
 
   onSearchSubmit(event) {
     const { searchTerm } = this.state;
-    this.fetchSearchTopStories(searchTerm);
+    this.setState({ searchKey: searchTerm });
+    if (this.needsToSearchTopStories(searchTerm)) {
+      this.fetchSearchTopStories(searchTerm);
+    }
     // prevent default browser behaviour when submitting HTML form
     // event.preventDefault() suppress the native browser behaviour
     event.preventDefault();
   }
 
   onDismiss(id) {
+    const { searchKey, results } = this.state;
+    const { hits, page } = results[searchKey];
+
     const isNotId = item => item.objectID !== id;
-    const updatedHits = this.state.result.hits.filter(isNotId);
+    const updatedHits = hits.filter(isNotId);
     this.setState({
       // React embraces immutable data structures, so we don’t want to mutate an object
       // (or mutate the state directly). We want to generate a new object based on the
       // information given, so none of the objects get altered and we keep the immutable
       // data structures. You will always return a new object, but never alter the original object.
-      result: Object.assign({}, this.state.result, { hits: updatedHits })
+      rresults: {
+        ...results,
+        [searchKey]: { hits: updatedHits, page }
+      }
       // ES6 spread operator useage
       // result: { ...this.state.result, hits: updatedHits }
     });
   }
 
   render() {
-    const { searchTerm, result } = this.state;
-    const page = (result && result.page) || 0;
-    if (!result) {
-      return null;
-    }
+    const { searchTerm, results, searchKey } = this.state;
+    const page =
+      (results && results[searchKey] && results[searchKey].page) || 0;
+    const list =
+      (results && results[searchKey] && results[searchKey].hits) || [];
+    // if (!result) {
+    //   return null;
+    // }
 
     return (
       <div className="page">
@@ -102,12 +130,11 @@ class App extends Component {
             Search
           </Search>
         </div>
-        {result ? (
-          <Table list={result.hits} onDismiss={this.onDismiss} />
-        ) : null}
+        <Table list={list} onDismiss={this.onDismiss} />
+
         <div className="interactions">
           <Button
-            onClick={() => this.fetchSearchTopStories(searchTerm, page + 1)}
+            onClick={() => this.fetchSearchTopStories(searchKey, page + 1)}
           >
             More
           </Button>
